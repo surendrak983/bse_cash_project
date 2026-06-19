@@ -1,0 +1,11 @@
+# Database (regenerated daily, don't commit)
+Data/
+*.db
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Editor/OS junk
+.vscode/
+Thumbs.db

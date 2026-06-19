@@ -1,0 +1,47 @@
+{
+  "moving_averages": {
+    "ema_periods": [
+      5
+    ],
+    "sma_periods": [
+      20,
+      50,
+      100,
+      200
+    ]
+  },
+  "rsi": {
+    "period": 14
+  },
+  "macd": {
+    "fast": 12,
+    "slow": 26,
+    "signal": 9
+  },
+  "bollinger_bands": {
+    "period": 20,
+    "std_dev": 2
+  },
+  "atr": {
+    "period": 14
+  },
+  "adx": {
+    "period": 14
+  },
+  "stochastic": {
+    "k_period": 14,
+    "d_period": 3
+  },
+  "supertrend": {
+    "atr_period": 14,
+    "multiplier": 3
+  },
+  "vwap": {
+    "window": 20,
+    "window_monthly": 3
+  },
+  "volume_profile": {
+    "lookback_bars": 252,
+    "buckets": 24
+  }
+}

@@ -1,0 +1,949 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BSE Cash EOD — Technical Analysis</title>
+<script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
+<style>
+:root{
+  --bg0:#0c0e14;--bg1:#141720;--bg2:#1c2030;--bg3:#242840;
+  --border:#252b40;--text1:#d1d8f0;--text2:#7a86a8;--text3:#404860;
+  --green:#26a69a;--red:#ef5350;--amber:#ffa726;--blue:#2196f3;--purple:#ab47bc;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:var(--bg0);color:var(--text1);font-family:'Segoe UI',Arial,sans-serif;font-size:12px}
+
+#toolbar{
+  display:flex;align-items:center;gap:5px;padding:5px 10px;
+  background:var(--bg1);border-bottom:1px solid var(--border);
+  flex-wrap:wrap;min-height:44px;
+}
+#symbolSelect{
+  background:var(--bg2);border:1px solid var(--border);color:var(--text1);
+  padding:4px 8px;border-radius:4px;font-size:12px;min-width:140px;
+}
+.sep{width:1px;height:18px;background:var(--border);flex-shrink:0}
+.tf-btn{
+  background:var(--bg2);border:1px solid var(--border);color:var(--text2);
+  padding:3px 10px;border-radius:4px;cursor:pointer;font-size:11px;
+}
+.tf-btn.active{background:#0d1a30;border-color:var(--blue);color:var(--blue)}
+.grp-label{font-size:10px;color:var(--text3);white-space:nowrap}
+.ind-toggle{
+  background:var(--bg2);border:1px solid var(--border);color:var(--text2);
+  padding:2px 7px;border-radius:4px;cursor:pointer;font-size:10px;white-space:nowrap;
+}
+.g-ma   .ind-toggle.active{color:#29b6f6;border-color:#29b6f6}
+.g-vol  .ind-toggle.active{color:#26a69a;border-color:#26a69a}
+.g-bb   .ind-toggle.active{color:#78909c;border-color:#78909c}
+.g-str  .ind-toggle.active{color:#ab47bc;border-color:#ab47bc}
+.g-sub  .ind-toggle.active{color:var(--amber);border-color:var(--amber)}
+.g-fvg  .ind-toggle.active{color:#ff7043;border-color:#ff7043}
+#info{margin-left:auto;color:var(--text3);font-size:11px;white-space:nowrap}
+
+#wrap{display:flex;height:calc(100vh - 44px)}
+#chartArea{flex:1;display:flex;flex-direction:column;min-width:0}
+#chartMain{flex:1;min-height:0;position:relative}
+#legend{
+  position:absolute;top:4px;left:8px;z-index:10;pointer-events:none;
+  display:flex;flex-wrap:wrap;gap:6px;font-size:10px;color:var(--text2);
+}
+#legend span{white-space:nowrap}
+.lup{color:var(--green)}.ldn{color:var(--red)}
+#chartVolPanel{flex-shrink:0;border-top:1px solid var(--border)}
+#chartVolume{height:88px;border-bottom:1px solid #1a1e2e}
+#chartDelivery{height:72px}
+#chartMacd{height:88px;flex-shrink:0;border-top:1px solid var(--border);display:none}
+#chartAdx{height:80px;flex-shrink:0;border-top:1px solid var(--border);display:none}
+#chartRsi{height:76px;flex-shrink:0;border-top:1px solid var(--border);display:none}
+#chartStoch{height:76px;flex-shrink:0;border-top:1px solid var(--border);display:none}
+#vpPanel{width:0;overflow:hidden;transition:width .2s;flex-shrink:0;border-left:1px solid var(--border);background:var(--bg1)}
+#vpPanel.open{width:120px}
+#vpCanvas{width:100%;height:100%}
+</style>
+</head>
+<body>
+
+<div id="toolbar">
+  <select id="symbolSelect">
+    <option value="">— Symbol —</option>
+    {% for sym in symbols %}
+    <option value="{{ sym }}">{{ sym }}</option>
+    {% endfor %}
+  </select>
+
+  <div class="sep"></div>
+  <button class="tf-btn active" data-tf="daily">D</button>
+  <button class="tf-btn"        data-tf="weekly">W</button>
+  <button class="tf-btn"        data-tf="monthly">M</button>
+  <div class="sep"></div>
+
+  <span class="grp-label">MA</span>
+  <div id="maToggles" class="g-ma" style="display:contents"></div>
+  <div class="g-ma" style="display:contents">
+    <button class="ind-toggle" data-ind="vwap">VWAP</button>
+  </div>
+
+  <div class="sep"></div>
+  <span class="grp-label">BAND</span>
+  <div class="g-bb" style="display:contents">
+    <button class="ind-toggle" data-ind="bb">BB</button>
+  </div>
+  <div class="g-str" style="display:contents">
+    <button class="ind-toggle" data-ind="supertrend">Supertrend</button>
+  </div>
+  <div class="g-fvg" style="display:contents">
+    <button class="ind-toggle" data-ind="fvg">FVG</button>
+  </div>
+  <div class="g-str" style="display:contents">
+    <button class="ind-toggle" data-ind="pivot">Pivot</button>
+  </div>
+  <div class="g-vol" style="display:contents">
+    <button class="ind-toggle" data-ind="volprofile">Vol Profile</button>
+  </div>
+
+  <div class="sep"></div>
+  <span class="grp-label">PANEL</span>
+  <div class="g-sub" style="display:contents">
+    <button class="ind-toggle" data-ind="macd">MACD</button>
+    <button class="ind-toggle" data-ind="rsi">RSI</button>
+    <button class="ind-toggle" data-ind="adx">ADX</button>
+    <button class="ind-toggle" data-ind="stoch">Stoch</button>
+  </div>
+
+  <span id="info"></span>
+</div>
+
+<div id="wrap">
+  <div id="chartArea">
+    <div id="chartMain"><div id="legend"></div></div>
+    <div id="chartVolPanel">
+      <div id="chartVolume"></div>
+      <div id="chartDelivery"></div>
+    </div>
+    <div id="chartMacd"></div>
+    <div id="chartAdx"></div>
+    <div id="chartRsi"></div>
+    <div id="chartStoch"></div>
+  </div>
+  <div id="vpPanel"><canvas id="vpCanvas"></canvas></div>
+</div>
+
+<script>
+const LC = LightweightCharts;
+let chartData = null, currentTf = 'daily', currentSymbol = '';
+
+// indVisible: keys for static indicators; MA keys are built dynamically from config_snapshot
+const indVisible = {
+  vwap:false, bb:false, supertrend:false, fvg:false,
+  pivot:false, volprofile:false, macd:false, rsi:false, adx:false, stoch:false,
+};
+
+// MA series registries — populated dynamically when first symbol loads
+const maSeries = {};   // key: 'ema5', 'sma20', etc → LW series
+const MA_PALETTE = [
+  '#f6c90e','#26c6da','#29b6f6','#4fc3f7','#ff7043',
+  '#00e5ff','#80cbc4','#ce93d8','#ffcc02','#a5d6a7',
+];
+let paletteIdx = 0;
+function nextColor() { return MA_PALETTE[paletteIdx++ % MA_PALETTE.length]; }
+const maColors = {};   // key → hex, stable across re-renders
+
+let mainChart, volChart, deliveryChart, macdChart, adxChart, rsiChart, stochChart;
+let candleSeries, volSeries, deliverySeries;
+let bbUpper, bbMiddle, bbLower, vwapSeries, supertrendSeries;
+let macdLine, macdSig, macdHist, adxLine, plusDiLine, minusDiLine, rsiSeries, stochK, stochD;
+let fvgSeries = [], pivotSeries = [];
+
+// ── Chart factory ──────────────────────────────────────────────────────────
+function makeChart(el, opts={}) {
+  return LC.createChart(el, {
+    layout:{ background:{color:'#0c0e14'}, textColor:'#7a86a8' },
+    grid:{ vertLines:{color:'#1a1e2e'}, horzLines:{color:'#1a1e2e'} },
+    crosshair:{ mode: LC.CrosshairMode.Normal },
+    rightPriceScale:{ borderColor:'#252b40', scaleMargins: opts.margins||{top:.1,bottom:.1} },
+    timeScale:{ borderColor:'#252b40', visible: opts.timeVisible!==false },
+    handleScroll:{ mouseWheel:true, pressedMouseMove:true },
+    handleScale:{ mouseWheel:true, pinch:true },
+  });
+}
+
+function initCharts() {
+  mainChart  = makeChart(document.getElementById('chartMain'),   { timeVisible:false });
+  volChart      = makeChart(document.getElementById('chartVolume'),   { timeVisible:false, margins:{top:.05,bottom:0} });
+  deliveryChart = makeChart(document.getElementById('chartDelivery'), { timeVisible:true,  margins:{top:.05,bottom:0} });
+  macdChart  = makeChart(document.getElementById('chartMacd'),   { timeVisible:false });
+  adxChart   = makeChart(document.getElementById('chartAdx'),    { timeVisible:false });
+  rsiChart   = makeChart(document.getElementById('chartRsi'),    { timeVisible:false });
+  stochChart = makeChart(document.getElementById('chartStoch'),  { timeVisible:false });
+
+  candleSeries = mainChart.addCandlestickSeries({
+    upColor:'#26a69a',downColor:'#ef5350',borderVisible:false,
+    wickUpColor:'#26a69a',wickDownColor:'#ef5350',
+  });
+  volSeries      = volChart.addHistogramSeries({ priceScaleId:'right', priceFormat:{type:'volume'} });
+  deliverySeries = deliveryChart.addHistogramSeries({ priceScaleId:'right', priceFormat:{type:'volume'} });
+
+  // Static overlay series
+  bbUpper        = mainChart.addLineSeries({ color:'#546e7a', lineWidth:1, lineStyle:2, visible:false });
+  bbMiddle       = mainChart.addLineSeries({ color:'#546e7a', lineWidth:1, lineStyle:1, visible:false });
+  bbLower        = mainChart.addLineSeries({ color:'#546e7a', lineWidth:1, lineStyle:2, visible:false });
+  vwapSeries     = mainChart.addLineSeries({ color:'#00e5ff', lineWidth:1, lineStyle:3, visible:false });
+  supertrendSeries = mainChart.addLineSeries({ color:'#26a69a', lineWidth:1, visible:false });
+
+  // Sub-panel series
+  macdLine = macdChart.addLineSeries({ color:'#2196f3', lineWidth:1 });
+  macdSig  = macdChart.addLineSeries({ color:'#ff9800', lineWidth:1 });
+  macdHist = macdChart.addHistogramSeries({ color:'#26a69a' });
+  adxLine     = adxChart.addLineSeries({ color:'#ffa726', lineWidth:1.5 });
+  plusDiLine  = adxChart.addLineSeries({ color:'#26a69a', lineWidth:1 });
+  minusDiLine = adxChart.addLineSeries({ color:'#ef5350', lineWidth:1 });
+  rsiSeries = rsiChart.addLineSeries({ color:'#ab47bc', lineWidth:1 });
+  stochK    = stochChart.addLineSeries({ color:'#2196f3', lineWidth:1 });
+  stochD    = stochChart.addLineSeries({ color:'#ff9800', lineWidth:1 });
+
+  mainChart.timeScale().subscribeVisibleLogicalRangeChange(range => {
+    if (!range) return;
+    [volChart,deliveryChart,macdChart,adxChart,rsiChart,stochChart].forEach(c =>
+      c.timeScale().setVisibleLogicalRange(range));
+  });
+  mainChart.subscribeCrosshairMove(updateLegend);
+  new ResizeObserver(fitAll).observe(document.getElementById('wrap'));
+  fitAll();
+}
+
+function fitAll() {
+  [[mainChart,'chartMain'],[volChart,'chartVolume'],[deliveryChart,'chartDelivery'],[macdChart,'chartMacd'],
+   [adxChart,'chartAdx'],[rsiChart,'chartRsi'],[stochChart,'chartStoch']].forEach(([c,id]) => {
+    const el = document.getElementById(id);
+    c.applyOptions({ width:el.clientWidth, height:el.clientHeight });
+  });
+  drawVolProfile();
+}
+
+// ── Dynamic MA toggle buttons (built from config_snapshot in JSON) ─────────
+function buildMaToggles(snap) {
+  const container = document.getElementById('maToggles');
+  container.innerHTML = '';
+  const keys = [
+    ...snap.ema_periods.map(p => `ema${p}`),
+    ...snap.sma_periods.map(p => `sma${p}`),
+  ];
+  for (const key of keys) {
+    // Ensure series exists on mainChart
+    if (!maSeries[key]) {
+      if (!maColors[key]) maColors[key] = nextColor();
+      maSeries[key] = mainChart.addLineSeries({ color:maColors[key], lineWidth:1, visible:false });
+      indVisible[key] = false;
+    }
+    const label = key.startsWith('ema')
+      ? `EMA${key.slice(3)}`
+      : `SMA${key.slice(3)}`;
+    const btn = document.createElement('button');
+    btn.className = 'ind-toggle';
+    btn.dataset.ind = key;
+    btn.textContent = label;
+    btn.style.setProperty('--ma-col', maColors[key]);
+    if (indVisible[key]) btn.classList.add('active');
+    btn.addEventListener('click', () => {
+      indVisible[key] = !indVisible[key];
+      btn.classList.toggle('active', indVisible[key]);
+      maSeries[key].applyOptions({ visible: indVisible[key] });
+    });
+    container.appendChild(btn);
+    // active style uses currentColor trick via parent .g-ma; override inline
+    btn.addEventListener('mouseenter', () => { if(indVisible[key]) btn.style.color = maColors[key]; });
+  }
+  // Style active toggle with per-MA colour
+  updateMaBtnStyles();
+}
+
+function updateMaBtnStyles() {
+  document.querySelectorAll('#maToggles .ind-toggle').forEach(btn => {
+    const key = btn.dataset.ind;
+    if (indVisible[key]) {
+      btn.style.color = maColors[key];
+      btn.style.borderColor = maColors[key];
+    } else {
+      btn.style.color = '';
+      btn.style.borderColor = '';
+    }
+  });
+}
+
+// ── Data ───────────────────────────────────────────────────────────────────
+async function loadChart() {
+  if (!currentSymbol) return;
+  document.getElementById('info').textContent = 'Loading…';
+  const res = await fetch(`/api/chart/${currentSymbol}`);
+  if (!res.ok) { document.getElementById('info').textContent = 'Error'; return; }
+  chartData = await res.json();
+  // Build/update MA buttons from the snapshot stored in the JSON
+  if (chartData.config_snapshot) buildMaToggles(chartData.config_snapshot);
+  renderTimeframe();
+}
+
+function setData(series, data) {
+  series.setData(data.filter(d => d.value != null));
+}
+
+function renderTimeframe() {
+  if (!chartData) return;
+  const tfData = chartData.timeframes?.[currentTf];
+  if (!tfData?.bars?.length) { document.getElementById('info').textContent = 'No data'; return; }
+  const bars = tfData.bars;
+
+  // OHLCV
+  candleSeries.setData(bars.map(b => ({ time:b.time, open:b.open, high:b.high, low:b.low, close:b.close })));
+
+  // Traded volume — green/red by candle direction; brighter when volume_signal=1 (high volume)
+  volSeries.setData(bars.map(b => ({
+    time:  b.time,
+    value: b.volume,
+    color: (b.close >= b.open ? '#26a69a' : '#ef5350') + (b.volume_signal === 1 ? 'ff' : '66'),
+  })).filter(b => b.value != null));
+
+  // Deliverable quantity — steel-blue solid; fades when delivery_pct is low (<30%)
+  // Not present in BSE bhavcopy data (no delivery_qty column upstream), so the
+  // panel collapses to 0 height instead of showing an empty strip.
+  const hasDelivery = bars.some(b => b.delivery_qty != null);
+  document.getElementById('chartDelivery').style.display = hasDelivery ? 'block' : 'none';
+  deliverySeries.setData(bars.map(b => {
+    if (b.delivery_qty == null) return null;
+    const pct   = b.delivery_pct ?? 50;
+    // opacity: low delivery (<30%) = muted, high delivery (>60%) = bright
+    const alpha = pct < 30 ? '55' : pct > 60 ? 'ff' : 'aa';
+    return { time: b.time, value: b.delivery_qty, color: '#42a5f5' + alpha };
+  }).filter(Boolean));
+
+  // MA series — only those that exist in maSeries map
+  for (const [key, series] of Object.entries(maSeries)) {
+    setData(series, bars.map(b => ({ time:b.time, value:b[key] })));
+  }
+
+  // VWAP
+  setData(vwapSeries, bars.map(b => ({ time:b.time, value:b.vwap })));
+
+  // BB
+  setData(bbUpper,  bars.map(b => ({ time:b.time, value:b.bb_upper })));
+  setData(bbMiddle, bars.map(b => ({ time:b.time, value:b.bb_middle })));
+  setData(bbLower,  bars.map(b => ({ time:b.time, value:b.bb_lower })));
+
+  // Supertrend (colour per direction)
+  supertrendSeries.setData(bars.filter(b=>b.supertrend!=null).map(b => ({
+    time:b.time, value:b.supertrend,
+    color: b.supertrend_dir===-1 ? '#26a69a' : '#ef5350',
+  })));
+
+  // Sub panels
+  setData(macdLine, bars.map(b=>({time:b.time,value:b.macd})));
+  setData(macdSig,  bars.map(b=>({time:b.time,value:b.macd_signal})));
+  macdHist.setData(bars.filter(b=>b.macd_hist!=null).map(b=>({
+    time:b.time, value:b.macd_hist,
+    color:b.macd_hist>=0?'#26a69a80':'#ef535080',
+  })));
+  setData(adxLine,    bars.map(b=>({time:b.time,value:b.adx})));
+  setData(plusDiLine, bars.map(b=>({time:b.time,value:b.plus_di})));
+  setData(minusDiLine,bars.map(b=>({time:b.time,value:b.minus_di})));
+  setData(rsiSeries,  bars.map(b=>({time:b.time,value:b.rsi})));
+  setData(stochK,     bars.map(b=>({time:b.time,value:b.stoch_k})));
+  setData(stochD,     bars.map(b=>({time:b.time,value:b.stoch_d})));
+
+  // FVG / Pivot — remove old, redraw if toggled
+  fvgSeries.forEach(s=>mainChart.removeSeries(s)); fvgSeries=[];
+  pivotSeries.forEach(s=>mainChart.removeSeries(s)); pivotSeries=[];
+  if (indVisible.fvg)   drawFVG(bars);
+  if (indVisible.pivot) drawPivot(bars);
+
+  applyVisibility();
+  drawVolProfile();
+
+  document.getElementById('info').textContent =
+    `${currentSymbol} · ${currentTf.toUpperCase()} · ${bars.length} bars · ${bars[bars.length-1].date}`;
+  mainChart.timeScale().fitContent();
+  volChart.timeScale().fitContent();
+}
+
+// ── FVG bands ──────────────────────────────────────────────────────────────
+function drawFVG(bars) {
+  for (let i=0; i<bars.length; i++) {
+    const b = bars[i];
+    const endBar = bars[Math.min(i+15, bars.length-1)];
+    if (b.fvg_bull_top != null) {
+      const t = mainChart.addLineSeries({color:'#26a69a28',lineWidth:1,lastValueVisible:false,priceLineVisible:false});
+      const bt= mainChart.addLineSeries({color:'#26a69a28',lineWidth:1,lastValueVisible:false,priceLineVisible:false});
+      t.setData([{time:b.time,value:b.fvg_bull_top},{time:endBar.time,value:b.fvg_bull_top}]);
+      bt.setData([{time:b.time,value:b.fvg_bull_bottom},{time:endBar.time,value:b.fvg_bull_bottom}]);
+      fvgSeries.push(t,bt);
+    }
+    if (b.fvg_bear_top != null) {
+      const t = mainChart.addLineSeries({color:'#ef535028',lineWidth:1,lastValueVisible:false,priceLineVisible:false});
+      const bt= mainChart.addLineSeries({color:'#ef535028',lineWidth:1,lastValueVisible:false,priceLineVisible:false});
+      t.setData([{time:b.time,value:b.fvg_bear_top},{time:endBar.time,value:b.fvg_bear_top}]);
+      bt.setData([{time:b.time,value:b.fvg_bear_bottom},{time:endBar.time,value:b.fvg_bear_bottom}]);
+      fvgSeries.push(t,bt);
+    }
+  }
+}
+
+// ── Pivot lines ────────────────────────────────────────────────────────────
+function drawPivot(bars) {
+  const last = [...bars].reverse().find(b=>b.pivot_p!=null);
+  if (!last) return;
+  const idx = bars.indexOf(last);
+  const start = bars[Math.max(0,idx-30)];
+  const levels = [
+    {key:'pivot_p', color:'#ffd54f',label:'P'},
+    {key:'pivot_r1',color:'#ef9a9a',label:'R1'},{key:'pivot_r2',color:'#ef9a9a',label:'R2'},{key:'pivot_r3',color:'#ef9a9a',label:'R3'},
+    {key:'pivot_s1',color:'#80cbc4',label:'S1'},{key:'pivot_s2',color:'#80cbc4',label:'S2'},{key:'pivot_s3',color:'#80cbc4',label:'S3'},
+  ];
+  for (const lv of levels) {
+    if (last[lv.key]==null) continue;
+    const s = mainChart.addLineSeries({color:lv.color,lineWidth:1,lineStyle:2,lastValueVisible:true,priceLineVisible:false,title:lv.label});
+    s.setData([{time:start.time,value:last[lv.key]},{time:last.time,value:last[lv.key]}]);
+    pivotSeries.push(s);
+  }
+}
+
+// ── Volume Profile ─────────────────────────────────────────────────────────
+function drawVolProfile() {
+  const panel = document.getElementById('vpPanel');
+  if (!indVisible.volprofile || !chartData) { panel.classList.remove('open'); return; }
+  panel.classList.add('open');
+  const vp = chartData.timeframes?.[currentTf]?.vol_profile;
+  if (!vp?.length) return;
+  const canvas = document.getElementById('vpCanvas');
+  const ctx = canvas.getContext('2d');
+  canvas.width = canvas.offsetWidth; canvas.height = canvas.offsetHeight;
+  const W=canvas.width, H=canvas.height;
+  ctx.clearRect(0,0,W,H);
+  const maxPct = Math.max(...vp.map(b=>b.pct));
+  const poc = vp.reduce((a,b)=>b.vol>a.vol?b:a);
+  const barH = H/vp.length;
+  for (let i=0;i<vp.length;i++) {
+    const bk=vp[i], y=H-(i+1)*barH, bw=(bk.pct/maxPct)*(W-34);
+    const isPOC = bk.price===poc.price;
+    ctx.fillStyle = isPOC ? '#ffa72688':'#26a69a33';
+    ctx.fillRect(0,y,bw,barH-1);
+    if (isPOC) { ctx.strokeStyle='#ffa726'; ctx.lineWidth=1; ctx.strokeRect(0,y,bw,barH-1); }
+    if (i%4===0) { ctx.fillStyle='#7a86a8'; ctx.font='9px Segoe UI'; ctx.fillText(bk.price.toFixed(0),bw+2,y+barH/2+3); }
+  }
+  ctx.fillStyle='#ffa726'; ctx.font='bold 9px Segoe UI';
+  const pocY=H-(vp.indexOf(poc)+1)*barH;
+  ctx.fillText('POC',2,pocY+barH/2+3);
+}
+
+// ── Visibility ─────────────────────────────────────────────────────────────
+function applyVisibility() {
+  const v = indVisible;
+  // MA — controlled per-series via buildMaToggles / toggle handler
+  for (const [key,series] of Object.entries(maSeries)) series.applyOptions({visible:!!v[key]});
+  vwapSeries.applyOptions({visible:v.vwap});
+  [bbUpper,bbMiddle,bbLower].forEach(s=>s.applyOptions({visible:v.bb}));
+  supertrendSeries.applyOptions({visible:v.supertrend});
+
+  // FVG
+  if (v.fvg && fvgSeries.length===0 && chartData)  drawFVG(chartData.timeframes[currentTf].bars);
+  if (!v.fvg && fvgSeries.length>0) { fvgSeries.forEach(s=>mainChart.removeSeries(s)); fvgSeries=[]; }
+
+  // Pivot
+  if (v.pivot && pivotSeries.length===0 && chartData) drawPivot(chartData.timeframes[currentTf].bars);
+  if (!v.pivot && pivotSeries.length>0) { pivotSeries.forEach(s=>mainChart.removeSeries(s)); pivotSeries=[]; }
+
+  // Sub panels
+  const panels={macd:'chartMacd',adx:'chartAdx',rsi:'chartRsi',stoch:'chartStoch'};
+  for (const [k,id] of Object.entries(panels)) document.getElementById(id).style.display=v[k]?'block':'none';
+
+  drawVolProfile();
+  fitAll();
+}
+
+// ── Crosshair legend ───────────────────────────────────────────────────────
+function updateLegend(param) {
+  const el=document.getElementById('legend');
+  if (!param.time||!chartData){el.innerHTML='';return;}
+  const bars=chartData.timeframes?.[currentTf]?.bars||[];
+  const b=bars.find(x=>x.time===param.time);
+  if(!b)return;
+  const d=b.close>=b.open?'up':'dn';
+  let h=`<span class="l${d}">O ${b.open}  H ${b.high}  L ${b.low}  C ${b.close}</span>`;
+  if(b.volume)       h+=`<span>Vol <b>${(b.volume/1e5).toFixed(1)}L</b></span>`;
+  if(b.delivery_qty) h+=`<span style="color:#42a5f5">Del <b>${(b.delivery_qty/1e5).toFixed(1)}L</b>${b.delivery_pct!=null?' ('+b.delivery_pct+'%)':''}</span>`;
+  // MA values — show only active ones
+  for (const [key] of Object.entries(maSeries)) {
+    if(indVisible[key]&&b[key]!=null){
+      const label=key.startsWith('ema')?`E${key.slice(3)}`:`S${key.slice(3)}`;
+      h+=`<span style="color:${maColors[key]}">${label} ${b[key]}</span>`;
+    }
+  }
+  if(indVisible.vwap&&b.vwap)     h+=`<span style="color:#00e5ff">VWAP ${b.vwap}</span>`;
+  if(indVisible.rsi&&b.rsi!=null) h+=`<span style="color:#ab47bc">RSI ${b.rsi.toFixed(1)}</span>`;
+  if(indVisible.adx&&b.adx!=null) h+=`<span style="color:#ffa726">ADX ${b.adx.toFixed(1)}</span>`;
+  if(indVisible.adx&&b.plus_di!=null) h+=`<span style="color:#26a69a">+DI ${b.plus_di.toFixed(1)}</span><span style="color:#ef5350">-DI ${b.minus_di.toFixed(1)}</span>`;
+  if(b.atr!=null)  h+=`<span>ATR ${b.atr}</span>`;
+  if(b.datr!=null) h+=`<span>DATR ${b.datr}%</span>`;
+  if(indVisible.supertrend&&b.supertrend!=null){
+    const col=b.supertrend_dir===-1?'#26a69a':'#ef5350';
+    h+=`<span style="color:${col}">ST ${b.supertrend}</span>`;
+  }
+  el.innerHTML=h;
+}
+
+// ── Events ─────────────────────────────────────────────────────────────────
+document.getElementById('symbolSelect').addEventListener('change',e=>{
+  currentSymbol=e.target.value; loadChart();
+});
+document.querySelectorAll('.tf-btn').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    document.querySelectorAll('.tf-btn').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    currentTf=btn.dataset.tf;
+    renderTimeframe();
+  });
+});
+document.querySelectorAll('.ind-toggle').forEach(btn=>{
+  const ind=btn.dataset.ind;
+  if(ind in indVisible) {
+    btn.addEventListener('click',()=>{
+      indVisible[ind]=!indVisible[ind];
+      btn.classList.toggle('active',indVisible[ind]);
+      applyVisibility();
+    });
+  }
+});
+
+initCharts();
+</script>
+</body>
+</html>
+<!-- ═══════════════════════════════════════════════════════════════
+     CONFIG PANEL  — appended to existing chart_viewer.html
+     Adds: ⚙ button in toolbar, slide-in right panel, save + rerun
+═══════════════════════════════════════════════════════════════ -->
+<style>
+/* ── Config button in toolbar ── */
+#cfgBtn{
+  margin-left:6px;background:var(--bg2);border:1px solid var(--border);
+  color:var(--text2);padding:3px 10px;border-radius:4px;cursor:pointer;
+  font-size:11px;transition:all .15s;
+}
+#cfgBtn:hover,#cfgBtn.open{border-color:var(--amber);color:var(--amber)}
+
+/* ── Slide-in panel ── */
+#cfgPanel{
+  position:fixed;top:0;right:-420px;width:420px;height:100vh;
+  background:#141720;border-left:1px solid #252b40;
+  z-index:1000;transition:right .25s ease;
+  display:flex;flex-direction:column;
+  box-shadow:-4px 0 24px #00000088;
+}
+#cfgPanel.open{right:0}
+#cfgHead{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:12px 16px;border-bottom:1px solid #252b40;flex-shrink:0;
+}
+#cfgHead h3{font-size:13px;font-weight:600;color:#d1d8f0;margin:0}
+#cfgClose{
+  background:none;border:none;color:#7a86a8;cursor:pointer;
+  font-size:18px;line-height:1;padding:0 4px;
+}
+#cfgClose:hover{color:#d1d8f0}
+#cfgScroll{flex:1;overflow-y:auto;padding:14px 16px;display:flex;flex-direction:column;gap:14px}
+#cfgScroll::-webkit-scrollbar{width:4px}
+#cfgScroll::-webkit-scrollbar-thumb{background:#252b40;border-radius:2px}
+
+/* ── Section ── */
+.cfg-section{background:#1c2030;border:1px solid #252b40;border-radius:6px;overflow:hidden}
+.cfg-section-head{
+  padding:8px 12px;font-size:11px;font-weight:600;color:#7a86a8;
+  text-transform:uppercase;letter-spacing:.06em;
+  display:flex;align-items:center;justify-content:space-between;
+  cursor:pointer;user-select:none;
+}
+.cfg-section-head:hover{color:#d1d8f0}
+.cfg-body{padding:10px 12px;display:flex;flex-direction:column;gap:8px;border-top:1px solid #1a1e2e}
+
+/* ── Row ── */
+.cfg-row{display:flex;align-items:center;gap:8px}
+.cfg-label{font-size:11px;color:#7a86a8;flex:0 0 130px}
+.cfg-help{font-size:10px;color:#404860;margin-top:2px;line-height:1.4}
+.cfg-input{
+  flex:1;background:#0c0e14;border:1px solid #252b40;color:#d1d8f0;
+  padding:4px 8px;border-radius:4px;font-size:12px;font-family:inherit;
+}
+.cfg-input:focus{outline:none;border-color:#ffa726}
+.cfg-input.err{border-color:#ef5350}
+.err-msg{font-size:10px;color:#ef5350;display:none}
+
+/* ── Footer ── */
+#cfgFoot{
+  padding:12px 16px;border-top:1px solid #252b40;flex-shrink:0;
+  display:flex;gap:8px;align-items:center;
+}
+#cfgSave{
+  flex:1;padding:7px;border:none;border-radius:4px;cursor:pointer;
+  font-size:12px;font-weight:600;background:#ffa726;color:#0c0e14;
+  transition:opacity .15s;
+}
+#cfgSave:hover{opacity:.9}
+#cfgSave:disabled{opacity:.4;cursor:default}
+#cfgRerun{
+  padding:7px 12px;border:1px solid #2196f3;border-radius:4px;
+  background:none;color:#2196f3;cursor:pointer;font-size:12px;
+  white-space:nowrap;transition:all .15s;
+}
+#cfgRerun:hover{background:#2196f320}
+#cfgRerun:disabled{opacity:.4;cursor:default}
+#cfgStatus{font-size:11px;color:#7a86a8;flex:0 0 auto}
+</style>
+
+<!-- Button injected into toolbar via JS below -->
+
+<!-- Config panel -->
+<div id="cfgPanel">
+  <div id="cfgHead">
+    <h3>⚙ Indicator Parameters</h3>
+    <button id="cfgClose" title="Close">✕</button>
+  </div>
+  <div id="cfgScroll">
+
+    <div class="cfg-section">
+      <div class="cfg-section-head">Moving Averages</div>
+      <div class="cfg-body">
+        <div>
+          <div class="cfg-row">
+            <span class="cfg-label">EMA periods</span>
+            <input class="cfg-input" id="c_ema_periods" placeholder="e.g. 5, 13">
+          </div>
+          <div class="cfg-help">Comma-separated integers, e.g. 5 or 5,13</div>
+        </div>
+        <div>
+          <div class="cfg-row">
+            <span class="cfg-label">SMA periods</span>
+            <input class="cfg-input" id="c_sma_periods" placeholder="e.g. 20,50,100,200">
+          </div>
+          <div class="cfg-help">Comma-separated integers</div>
+        </div>
+        <div>
+          <div class="cfg-row">
+            <span class="cfg-label">VWAP window</span>
+            <input class="cfg-input" id="c_vwap_window" type="number" min="2" max="250">
+          </div>
+          <div class="cfg-help">Rolling bars for daily/weekly (default 20)</div>
+        </div>
+        <div>
+          <div class="cfg-row">
+            <span class="cfg-label">VWAP monthly</span>
+            <input class="cfg-input" id="c_vwap_monthly" type="number" min="2" max="12">
+          </div>
+          <div class="cfg-help">Rolling bars for monthly chart (default 3)</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="cfg-section">
+      <div class="cfg-section-head">RSI</div>
+      <div class="cfg-body">
+        <div>
+          <div class="cfg-row">
+            <span class="cfg-label">Period</span>
+            <input class="cfg-input" id="c_rsi_period" type="number" min="2" max="100">
+          </div>
+          <div class="cfg-help">Standard 14 · Shorter=9 more signals · Longer=21 smoother</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="cfg-section">
+      <div class="cfg-section-head">MACD</div>
+      <div class="cfg-body">
+        <div class="cfg-row">
+          <span class="cfg-label">Fast EMA</span>
+          <input class="cfg-input" id="c_macd_fast" type="number" min="2" max="100">
+        </div>
+        <div class="cfg-row">
+          <span class="cfg-label">Slow EMA</span>
+          <input class="cfg-input" id="c_macd_slow" type="number" min="3" max="200">
+        </div>
+        <div class="cfg-row">
+          <span class="cfg-label">Signal</span>
+          <input class="cfg-input" id="c_macd_signal" type="number" min="2" max="50">
+        </div>
+        <div class="cfg-help">Classic 12/26/9 · Fast 8/17/9 · Weekly 19/39/9</div>
+        <div class="err-msg" id="e_macd">Fast must be less than Slow</div>
+      </div>
+    </div>
+
+    <div class="cfg-section">
+      <div class="cfg-section-head">Bollinger Bands</div>
+      <div class="cfg-body">
+        <div class="cfg-row">
+          <span class="cfg-label">Period</span>
+          <input class="cfg-input" id="c_bb_period" type="number" min="5" max="200">
+        </div>
+        <div class="cfg-row">
+          <span class="cfg-label">Std deviation</span>
+          <input class="cfg-input" id="c_bb_std" type="number" min="0.5" max="4" step="0.5">
+        </div>
+        <div class="cfg-help">Standard 20/2 · Tighter 20/1.5 · Wider 20/2.5</div>
+      </div>
+    </div>
+
+    <div class="cfg-section">
+      <div class="cfg-section-head">ATR / DATR</div>
+      <div class="cfg-body">
+        <div class="cfg-row">
+          <span class="cfg-label">ATR period</span>
+          <input class="cfg-input" id="c_atr_period" type="number" min="1" max="100">
+        </div>
+        <div class="cfg-help">Standard 14 · 10 for more responsive volatility</div>
+      </div>
+    </div>
+
+    <div class="cfg-section">
+      <div class="cfg-section-head">ADX / DI</div>
+      <div class="cfg-body">
+        <div class="cfg-row">
+          <span class="cfg-label">Period</span>
+          <input class="cfg-input" id="c_adx_period" type="number" min="2" max="100">
+        </div>
+        <div class="cfg-help">Standard 14 · ADX &gt;25 = trending, &lt;20 = ranging</div>
+      </div>
+    </div>
+
+    <div class="cfg-section">
+      <div class="cfg-section-head">Stochastic</div>
+      <div class="cfg-body">
+        <div class="cfg-row">
+          <span class="cfg-label">%K period</span>
+          <input class="cfg-input" id="c_stoch_k" type="number" min="2" max="100">
+        </div>
+        <div class="cfg-row">
+          <span class="cfg-label">%D period</span>
+          <input class="cfg-input" id="c_stoch_d" type="number" min="1" max="20">
+        </div>
+        <div class="cfg-help">Classic 14/3 · Fast 5/3 · Slow 14/5</div>
+      </div>
+    </div>
+
+    <div class="cfg-section">
+      <div class="cfg-section-head">Supertrend</div>
+      <div class="cfg-body">
+        <div class="cfg-row">
+          <span class="cfg-label">ATR period</span>
+          <input class="cfg-input" id="c_st_atr" type="number" min="1" max="100">
+        </div>
+        <div class="cfg-row">
+          <span class="cfg-label">Multiplier</span>
+          <input class="cfg-input" id="c_st_mult" type="number" min="0.5" max="10" step="0.5">
+        </div>
+        <div class="cfg-help">Standard 14/3 · Lower multiplier = more signals</div>
+      </div>
+    </div>
+
+    <div class="cfg-section">
+      <div class="cfg-section-head">Volume Profile</div>
+      <div class="cfg-body">
+        <div class="cfg-row">
+          <span class="cfg-label">Lookback bars</span>
+          <input class="cfg-input" id="c_vp_bars" type="number" min="20" max="1000">
+        </div>
+        <div class="cfg-row">
+          <span class="cfg-label">Price buckets</span>
+          <input class="cfg-input" id="c_vp_buckets" type="number" min="4" max="100">
+        </div>
+        <div class="cfg-help">252 bars ≈ 1 trading year · 24 buckets is standard</div>
+      </div>
+    </div>
+
+  </div><!-- /cfgScroll -->
+
+  <div id="cfgFoot">
+    <button id="cfgSave">Save config.json</button>
+    <button id="cfgRerun" title="Save then re-run analysis for current symbol">↻ Re-run</button>
+    <span id="cfgStatus"></span>
+  </div>
+</div><!-- /cfgPanel -->
+
+<script>
+// ── Inject ⚙ button into existing toolbar ──────────────────────────────────
+(function(){
+  const tb  = document.getElementById('toolbar');
+  const btn = document.createElement('button');
+  btn.id = 'cfgBtn';
+  btn.textContent = '⚙ Config';
+  tb.appendChild(btn);
+})();
+
+// ── Panel open/close ───────────────────────────────────────────────────────
+const cfgPanel = document.getElementById('cfgPanel');
+const cfgBtn   = document.getElementById('cfgBtn');
+document.getElementById('cfgClose').addEventListener('click', closeConfig);
+cfgBtn.addEventListener('click', () => {
+  if (cfgPanel.classList.contains('open')) closeConfig();
+  else openConfig();
+});
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeConfig(); });
+
+function openConfig()  { cfgPanel.classList.add('open');    cfgBtn.classList.add('open'); }
+function closeConfig() { cfgPanel.classList.remove('open'); cfgBtn.classList.remove('open'); }
+
+// ── Field map: DOM id → config path ───────────────────────────────────────
+const FIELD_MAP = [
+  // id,                 section,           key,            type
+  ['c_ema_periods',   'moving_averages', 'ema_periods',  'intarray'],
+  ['c_sma_periods',   'moving_averages', 'sma_periods',  'intarray'],
+  ['c_vwap_window',   'vwap',            'window',       'int'],
+  ['c_vwap_monthly',  'vwap',            'window_monthly','int'],
+  ['c_rsi_period',    'rsi',             'period',       'int'],
+  ['c_macd_fast',     'macd',            'fast',         'int'],
+  ['c_macd_slow',     'macd',            'slow',         'int'],
+  ['c_macd_signal',   'macd',            'signal',       'int'],
+  ['c_bb_period',     'bollinger_bands', 'period',       'int'],
+  ['c_bb_std',        'bollinger_bands', 'std_dev',      'float'],
+  ['c_atr_period',    'atr',             'period',       'int'],
+  ['c_adx_period',    'adx',             'period',       'int'],
+  ['c_stoch_k',       'stochastic',      'k_period',     'int'],
+  ['c_stoch_d',       'stochastic',      'd_period',     'int'],
+  ['c_st_atr',        'supertrend',      'atr_period',   'int'],
+  ['c_st_mult',       'supertrend',      'multiplier',   'float'],
+  ['c_vp_bars',       'volume_profile',  'lookback_bars','int'],
+  ['c_vp_buckets',    'volume_profile',  'buckets',      'int'],
+];
+
+// ── Load config into form ──────────────────────────────────────────────────
+async function loadConfigForm() {
+  setStatus('Loading…', '#7a86a8');
+  try {
+    const res = await fetch('/api/config');
+    if (!res.ok) throw new Error(await res.text());
+    const cfg = await res.json();
+    for (const [id, sec, key, type] of FIELD_MAP) {
+      const el  = document.getElementById(id);
+      const val = cfg[sec]?.[key];
+      if (val == null) continue;
+      el.value = type === 'intarray' ? val.join(', ') : val;
+    }
+    setStatus('', '');
+  } catch(e) {
+    setStatus('Load failed: ' + e.message, '#ef5350');
+  }
+}
+loadConfigForm();
+
+function openConfig() {
+  cfgPanel.classList.add('open');
+  cfgBtn.classList.add('open');
+  loadConfigForm();
+}
+
+// ── Collect form → config object ───────────────────────────────────────────
+function collectForm() {
+  const cfg = {};
+  let valid = true;
+
+  for (const [id, sec, key, type] of FIELD_MAP) {
+    const el  = document.getElementById(id);
+    const raw = el.value.trim();
+    let val;
+    if (type === 'intarray') {
+      val = raw.split(/[\s,]+/).filter(Boolean).map(Number);
+      if (val.some(x => !Number.isInteger(x) || x <= 0)) {
+        el.classList.add('err'); valid = false; continue;
+      }
+    } else if (type === 'int') {
+      val = parseInt(raw, 10);
+      if (isNaN(val) || val <= 0) { el.classList.add('err'); valid = false; continue; }
+    } else {
+      val = parseFloat(raw);
+      if (isNaN(val) || val <= 0) { el.classList.add('err'); valid = false; continue; }
+    }
+    el.classList.remove('err');
+    if (!cfg[sec]) cfg[sec] = {};
+    cfg[sec][key] = val;
+  }
+
+  // Cross-field: MACD fast < slow
+  const macdErr = document.getElementById('e_macd');
+  if (cfg.macd && cfg.macd.fast >= cfg.macd.slow) {
+    document.getElementById('c_macd_fast').classList.add('err');
+    document.getElementById('c_macd_slow').classList.add('err');
+    macdErr.style.display = 'block';
+    valid = false;
+  } else {
+    macdErr.style.display = 'none';
+  }
+
+  return valid ? cfg : null;
+}
+
+// ── Save ───────────────────────────────────────────────────────────────────
+async function saveConfig() {
+  const cfg = collectForm();
+  if (!cfg) { setStatus('Fix errors above', '#ef5350'); return; }
+  setStatus('Saving…', '#ffa726');
+  document.getElementById('cfgSave').disabled  = true;
+  document.getElementById('cfgRerun').disabled = true;
+  try {
+    const res  = await fetch('/api/config', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(cfg),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Save failed');
+    setStatus('✅ Saved', '#26a69a');
+    return true;
+  } catch(e) {
+    setStatus('❌ ' + e.message, '#ef5350');
+    return false;
+  } finally {
+    document.getElementById('cfgSave').disabled  = false;
+    document.getElementById('cfgRerun').disabled = false;
+  }
+}
+
+// ── Re-run ─────────────────────────────────────────────────────────────────
+async function rerunSymbol() {
+  const sym = currentSymbol || document.getElementById('symbolSelect').value;
+  if (!sym) { setStatus('Select a symbol first', '#ffa726'); return; }
+  const saved = await saveConfig();
+  if (!saved) return;
+  setStatus(`Running analysis for ${sym}…`, '#2196f3');
+  document.getElementById('cfgRerun').disabled = true;
+  try {
+    const res  = await fetch(`/api/rerun/${sym}`, { method:'POST' });
+    const data = await res.json();
+    if (data.ok) {
+      setStatus(`✅ ${sym} done — reload chart`, '#26a69a');
+      // Auto-reload chart data
+      await loadChart();
+    } else {
+      setStatus('❌ Analysis error — check server log', '#ef5350');
+      console.error(data.stderr || data.error);
+    }
+  } catch(e) {
+    setStatus('❌ ' + e.message, '#ef5350');
+  } finally {
+    document.getElementById('cfgRerun').disabled = false;
+  }
+}
+
+function setStatus(msg, color) {
+  const el = document.getElementById('cfgStatus');
+  el.textContent = msg;
+  el.style.color = color;
+}
+
+document.getElementById('cfgSave').addEventListener('click',  saveConfig);
+document.getElementById('cfgRerun').addEventListener('click', rerunSymbol);
+
+// Collapse sections on header click
+document.querySelectorAll('.cfg-section-head').forEach(h => {
+  h.addEventListener('click', () => {
+    const body = h.nextElementSibling;
+    body.style.display = body.style.display === 'none' ? '' : 'none';
+  });
+});
+</script>
